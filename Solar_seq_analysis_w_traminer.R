@@ -1,3 +1,4 @@
+library(dplyr)
 library(TraMineR)
 
 # define color pallet
@@ -82,7 +83,9 @@ hist(solar_ent, xlab = "Entropy", main = NULL)
 # Check the transition rates
 round(seqtrate(solar_seq), digits = 2)
 
-# Clustering of sequences
+####################################
+# Clustering of (regular) sequences
+####################################
 library(cluster)
 
 # First, compute dissimilarities among sequences using a method that is 
@@ -114,6 +117,13 @@ seqfplot(solar_seq, group = cl4_fac,
          main = "Sequence frequency plot", 
          with.legend=FALSE, axes=F, idxs=1:20, 
          cpal = col_pallet)
+
+# associate the clusters with student ids and save them
+# for later processing
+solar_seq_df <- readRDS("data/pre_processed/solar_sequences_df.RData")
+solar_ward_cl4 <- data.frame(student_id = solar_seq_df$student_id,
+                             cl4 = ward_cl4)
+saveRDS(solar_ward_cl4, "clustering/solar_ward_euclid_4_clust.RData")
 
 
 # Now, do the same, using a dissimilarity method that is 
@@ -174,6 +184,13 @@ seqfplot(solar_seq, group = factor(ward_3_cl4),
          with.legend=FALSE, axes=F, idxs=1:20, 
          cpal = col_pallet)
 # At the end, the solution with 4 clusters seemed to be the best one 
+
+# Associate the cluster assignments with student ids and save them
+# for later processing
+solar_om_ward_cl4 <- data.frame(student_id = solar_seq_df$student_id,
+                                cl4 = factor(ward_3_cl4))
+saveRDS(solar_om_ward_cl4, "clustering/solar_ward_OM_4_clust.RData")
+
 
 #####################################################
 # Examine long sequences from the Solar course
@@ -240,3 +257,86 @@ lseq_dist_euclid <- seqdist(seqdata = solar_lcompact_seq,
 lseq_ward <- agnes(lseq_dist_euclid, diss = T, method = "ward")
 plot(lseq_ward)
 # too granular, thus not useful...
+
+####################################################################
+# Compare clusters w.r.t. the features indicative of 
+# the level of student engagement in the discussion forums
+# - engaged_count - the number of weeks when the learner posted to 
+#   the discussion forum
+# - engaged_scope - the number of weeks between the very first week 
+#   the learner posted and the week of the last post
+# - core_poster - those with engaged_count >= 3
+####################################################################
+source("util_functions.R")
+
+# load the features about students' forum engagement
+forum_features <- read.csv("data/lca_features/lca_groups_solar.csv")
+str(forum_features)
+# Note: the number of students is far above the number of those 
+# whose data were used for sequence analysis => obviously these 
+# are all the students, not only those whose posts were hand-coded
+
+# remove the variables not required for analysis
+forum_features <- forum_features[,-c(1,5)]
+# rename variables to better reflect their meaning
+colnames(forum_features) <- c("student_id", "engaged_count", "engaged_scope")
+# add the core_poster feature
+forum_features$core_poster <- FALSE
+forum_features$core_poster[forum_features$engaged_count >= 3] <- TRUE
+
+#######################################################################
+# Comparison of the clusters obtained by applying the Ward's algorithm 
+# on sequence similarities computed using the OM metric 
+#######################################################################
+
+# Read in cluster assignments
+om_clusters <- readRDS("clustering/solar_ward_OM_4_clust.RData") 
+# Merge the cluster assignments w/ forum features data, keeping only
+# the data for students with hand-coded threads
+om_clust_data <- merge(x = om_clusters, y = forum_features,
+                       by = "student_id", all.x = TRUE, all.y = FALSE)
+which(!complete.cases(om_clust_data))
+# features available for all the students
+
+# examine the data
+table(om_clust_data$engaged_count)
+round(prop.table(table(om_clust_data$engaged_count)), digits = 2)
+table(om_clust_data$engaged_scope)
+round(prop.table(table(om_clust_data$engaged_scope)), digits = 2)
+table(om_clust_data$core_poster)
+round(prop.table(table(om_clust_data$core_poster)), digits = 2)
+
+# Compare clusters w.r.t. the forum engagement features
+library(knitr)
+om_clust_stats <- summary.stats(om_clust_data[,c(3,4)], om_clust_data$cl4)
+kable(om_clust_stats, format = 'rst')
+# check the distribution of core posters
+with(om_clust_data, table(core_poster, cl4))
+
+# Use statistical tests to compare clusters based on the given features
+# Check first if the features are normally distributed
+shapiro.test(om_clust_data$engaged_count)
+hist(om_clust_data$engaged_count)
+shapiro.test(om_clust_data$engaged_scope)
+hist(om_clust_data$engaged_scope)
+# no, not even nearly => use non-parametric tests
+
+kruskal.test(engaged_count ~ cl4, data = om_clust_data)
+# Kruskal-Wallis chi-squared = 169.62, df = 3, p-value < 2.2e-16
+kruskal.test(engaged_scope ~ cl4, data = om_clust_data)
+# Kruskal-Wallis chi-squared = 99.641, df = 3, p-value < 2.2e-16
+# =>
+# Singificant difference is present among the clusters for both examined features
+# Use pairwise tests to examine where exactly (i.e. between which cluster pairs) 
+# the difference is present
+
+# First, do pairwise comparisons for the engaged_count feature
+engage_cnt_comparison <- pairwise.compare.Mann.Whitney(om_clust_data, 'engaged_count', 'cl4', 4) 
+kable(x = engage_cnt_comparison, format = 'rst')
+
+# Now, do pairwise comparisons for the engaged_scope feature
+engage_scope_comparison <- pairwise.compare.Mann.Whitney(om_clust_data, 'engaged_scope', 'cl4', 4) 
+kable(x = engage_scope_comparison, format = 'rst')
+
+
+

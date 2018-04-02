@@ -70,7 +70,9 @@ hist(fp_ent, xlab = "Entropy", main = NULL)
 # Check the transition rates
 round(seqtrate(fp_seq), digits = 2)
 
+#########################
 # Clustering of sequences
+#########################
 library(cluster)
 
 # First, compute dissimilarities among sequences using a method that is 
@@ -110,6 +112,14 @@ seqfplot(fp_seq[ward_cl5 == 3,],
          cpal = col_pallet)
 seqtab(fp_seq[ward_cl5 == 3,], idxs = 1:20)
 hist(seqient(fp_seq[ward_cl5 == 3,]), xlab = "Entropy", main = NULL)
+
+# associate the clusters with student ids and save them
+# for later processing
+fp_seq_df <- readRDS("data/pre_processed/fp_sequences_df.RData")
+fp_ward_cl5 <- data.frame(student_id = fp_seq_df$student_id,
+                          cl5 = ward_cl5)
+saveRDS(fp_ward_cl5, "clustering/fp_ward_euclid_5_clust.RData")
+
 
 
 # Now, do the same, using a dissimilarity method that is 
@@ -171,9 +181,46 @@ seqfplot(fp_seq, group = cl5_3_fac,
          cpal = col_pallet)
 
 
+# Associate the cluster assignments with student ids and save them
+# for later processing
+fp_ward_om_cl5 <- data.frame(student_id = fp_seq_df$student_id,
+                             cl5 = ward_3_cl5)
+saveRDS(fp_ward_om_cl5, "clustering/fp_ward_OM_5_clust.RData")
 
-#####################################################
-# Examine long sequences from the FP course
-# (seq. with length above 97th percentile)
-#####################################################
 
+####################################################################
+# Compare clusters w.r.t. the features indicative of 
+# the level of student engagement in the discussion forums
+# - engaged_count - the number of weeks when the learner posted to 
+#   the discussion forum
+# - engaged_scope - the number of weeks between the very first week 
+#   the learner posted and the week of the last post
+# - core_poster - those with engaged_count >= 3
+####################################################################
+source("util_functions.R")
+
+# load the features about students' forum engagement
+forum_features <- read.csv("data/lca_features/lca_groups_fp.csv")
+str(forum_features)
+# remove the variables not required for analysis
+forum_features <- forum_features[,-c(1,5)]
+# rename variables to better reflect their meaning
+colnames(forum_features) <- c("student_id", "engaged_count", "engaged_scope")
+# add the core_poster feature
+forum_features$core_poster <- FALSE
+forum_features$core_poster[forum_features$engaged_count >= 3] <- TRUE
+
+
+#######################################################################
+# Comparison of the clusters obtained by applying the Ward's algorithm 
+# on sequence similarities computed using the OM metric 
+#######################################################################
+
+# Read in cluster assignments
+om_clusters <- readRDS("clustering/fp_ward_OM_5_clust.RData") 
+# Merge the cluster assignments w/ forum features data, keeping only
+# the data for students with hand-coded threads
+om_clust_data <- merge(x = om_clusters, y = forum_features,
+                       by = "student_id", all.x = TRUE, all.y = FALSE)
+which(!complete.cases(om_clust_data))
+# missing feature data for almost all students!

@@ -68,7 +68,9 @@ hist(h2o_ent, xlab = "Entropy", main = NULL)
 # Check the transition rates
 round(seqtrate(h2o_seq), digits = 2)
 
+###########################
 # Clustering of sequences
+###########################
 library(cluster)
 
 # First, compute dissimilarities among sequences using a method that is 
@@ -156,6 +158,14 @@ for(clust in 1:5) {
 }
 
 
+# associate the clusters with student ids and save them
+# for later processing
+h2o_seq_df <- readRDS("data/pre_processed/h2o_sequences_df.RData")
+h2o_ward_cl5 <- data.frame(student_id = h2o_seq_df$student_id,
+                          cl5 = ward_cl5)
+saveRDS(h2o_ward_cl5, "clustering/h2o_ward_euclid_5_clust.RData")
+
+
 
 # Now, do the same, using a dissimilarity method that is 
 # sensitive to timing; according to Studer & Richardson (2016), 
@@ -169,6 +179,7 @@ dist_euclid_2 <- seqdist(seqdata = h2o_seq,
 h2o_euclid_2_ward <- agnes(dist_euclid_2, diss = TRUE, method = "ward")
 plot(h2o_euclid_2_ward)
 # Tried with both with max and median length, but both produced poor clustering results
+
 
 
 # Now, use a set of features to decribe thread types, and based on these features
@@ -230,6 +241,89 @@ for(clust in 1:5) {
            main = paste("Representative seq. for cluster", clust), 
            with.legend=FALSE, cpal = col_pallet)
 }
+
+# Associate the clusters with student ids and save them
+# for later processing
+h2o_ward_om_cl5 <- data.frame(student_id = h2o_seq_df$student_id,
+                           cl5 = ward_3_cl5)
+saveRDS(h2o_ward_om_cl5, "clustering/h2o_ward_OM_5_clust.RData")
+
+
+####################################################################
+# Compare clusters w.r.t. the features indicative of 
+# the level of student engagement in the discussion forums
+# - engaged_count - the number of weeks when the learner posted to 
+#   the discussion forum
+# - engaged_scope - the number of weeks between the very first week 
+#   the learner posted and the week of the last post
+# - core_poster - those with engaged_count >= 3
+####################################################################
+source("util_functions.R")
+
+# load the features about students' forum engagement
+forum_features <- read.csv("data/lca_features/lca_groups_water.csv")
+str(forum_features)
+# remove the variables not required for analysis
+forum_features <- forum_features[,-c(1,5)]
+# rename variables to better reflect their meaning
+colnames(forum_features) <- c("student_id", "engaged_count", "engaged_scope")
+# add the core_poster feature
+forum_features$core_poster <- FALSE
+forum_features$core_poster[forum_features$engaged_count >= 3] <- TRUE
+
+#######################################################################
+# Comparison of the clusters obtained by applying the Ward's algorithm 
+# on sequence similarities computed using the OM metric 
+#######################################################################
+
+# Read in cluster assignments
+om_clusters <- readRDS("clustering/h2o_ward_OM_5_clust.RData") 
+# Merge the cluster assignments w/ forum features data, keeping only
+# the data for students with hand-coded threads
+om_clust_data <- merge(x = om_clusters, y = forum_features,
+                       by = "student_id", all.x = TRUE, all.y = FALSE)
+which(!complete.cases(om_clust_data))
+# features available for all the students
+
+# examine the data
+table(om_clust_data$engaged_count)
+round(prop.table(table(om_clust_data$engaged_count)), digits = 2)
+table(om_clust_data$engaged_scope)
+round(prop.table(table(om_clust_data$engaged_scope)), digits = 2)
+table(om_clust_data$core_poster)
+round(prop.table(table(om_clust_data$core_poster)), digits = 2)
+
+# Compare clusters w.r.t. the forum engagement features
+library(knitr)
+om_clust_stats <- summary.stats(om_clust_data[,c(3,4)], om_clust_data$cl5)
+kable(om_clust_stats, format = 'rst')
+# check the distribution of core posters
+with(om_clust_data, table(core_poster, cl5))
+
+# Use statistical tests to compare clusters based on the given features
+# Check first if the features are normally distributed
+shapiro.test(om_clust_data$engaged_count)
+hist(om_clust_data$engaged_count)
+shapiro.test(om_clust_data$engaged_scope)
+hist(om_clust_data$engaged_scope)
+# no, not even nearly => use non-parametric tests
+
+kruskal.test(engaged_count ~ cl5, data = om_clust_data)
+# Kruskal-Wallis chi-squared = 197.8, df = 4, p-value < 2.2e-16
+kruskal.test(engaged_scope ~ cl5, data = om_clust_data)
+# Kruskal-Wallis chi-squared = 164.76, df = 4, p-value < 2.2e-16
+# =>
+# Singificant difference is present among the clusters for both examined features
+# Use pairwise tests to examine where exactly (i.e. between which cluster pairs) 
+# the difference is present
+
+# First, do pairwise comparisons for the engaged_count feature
+engage_cnt_comparison <- pairwise.compare.Mann.Whitney(om_clust_data, 'engaged_count', 'cl5', 5) 
+kable(x = engage_cnt_comparison, format = 'rst')
+
+# Now, do pairwise comparisons for the engaged_scope feature
+engage_scope_comparison <- pairwise.compare.Mann.Whitney(om_clust_data, 'engaged_scope', 'cl5', 5) 
+kable(x = engage_scope_comparison, format = 'rst')
 
 
 

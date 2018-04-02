@@ -206,3 +206,37 @@ round(seqtrate(solar_long_seq), digits = 2)
 # Examine entropy
 hist(seqient(solar_long_seq), xlab = "Entropy", main = NULL)
 # tends to be very high - as expected
+
+#############################################################
+# Examine long sequences represented in the 'compact' format,
+# that is, in the format where:
+# - CT and CN codes are 'united' into the code C, 
+# - ST and SN codes are 'united' into the code S
+#############################################################
+
+solar_lcompact_seq <- readRDS("data/pre_processed/solar_long_compact_seq_SPS_format.RData")
+print(solar_lcompact_seq, format = "SPS")
+
+lcompact_cpallet <- c('#377eb8','#4daf4a','#984ea3','#ff7f00','#ffff33')
+
+seqdplot(solar_lcompact_seq, main = "Solar long sequences:\nCode distribution over time", 
+         cpal=lcompact_cpallet, 
+         with.legend=FALSE, border=NA)
+seqlegend(solar_lcompact_seq, cpal = lcompact_cpallet)
+
+solar_long_len <- seqlength(solar_lcompact_seq)
+sorted_lcompact_seq <- solar_lcompact_seq[order(solar_long_len),]
+seqiplot(sorted_lcompact_seq, 
+         main = "Solar: overly long sequences after merging Sx and Cx codes (N=18)", 
+         with.legend=FALSE, yaxis = FALSE, axes = FALSE, 
+         idxs=0, cpal = lcompact_cpallet, border = NA)
+
+# try to cluster these sequences 
+require(cluster)
+lseq_dist_euclid <- seqdist(seqdata = solar_lcompact_seq, 
+                       method = "EUCLID", 
+                       norm = "auto",
+                       step = 1)
+lseq_ward <- agnes(lseq_dist_euclid, diss = T, method = "ward")
+plot(lseq_ward)
+# too granular, thus not useful...

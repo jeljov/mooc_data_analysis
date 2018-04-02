@@ -230,7 +230,9 @@ h2o_posts_sorted <- h2o_posts_sorted %>%
 source("Sequencing_functions.R")
 library(TraMineR)
 
+###############
 # Water course:
+###############
 h2o_seq_list <- create_course_seq(h2o_posts_sorted)
 h2o_seq_df <- create_equal_length_seq(h2o_seq_list)
 ## create TraMineR sequences out of the sequences data frame
@@ -244,7 +246,10 @@ print(h2o_seq_final[1:10, 1:30], format = 'SPS')
 saveRDS(object = h2o_seq_df, file = "data/pre_processed/h2o_sequences_df.RData")
 saveRDS(object = h2o_seq_final, file = "data/pre_processed/h2o_sequences_SPS_format.RData")
 
+
+##############
 # Solar course
+##############
 solar_seq_list <- create_course_seq(solar_posts_sorted)
 solar_seq_df <- create_equal_length_seq(solar_seq_list)
 ## create TraMineR sequences out of the sequences data frame
@@ -271,8 +276,27 @@ print(solar_long_final[1:10, 1:30], format = 'SPS')
 saveRDS(object = solar_long_df, file = "data/pre_processed/solar_long_seq_df.RData")
 saveRDS(object = solar_long_final, file = "data/pre_processed/solar_long_seq_SPS_format.RData")
 
+## To make the long sequences less granular and thus easier to interpret, 
+## merge CT and CN states in C, and ST and SN into S states.
+solar_long_sorted <- solar_ann_posts %>% 
+  filter(student_id %in% solar_outliers) %>%
+  arrange(student_id, timestamp) %>%
+  mutate(code = as.character(code))
+solar_long_sorted$code[solar_long_sorted$code %in% c('CT', 'CN')] <- "C"
+solar_long_sorted$code[solar_long_sorted$code %in% c('ST', 'SN')] <- "S"
+solar_lcompact_seq <- create_course_seq(solar_long_sorted)
+solar_lcompact_df <- create_equal_length_seq(solar_lcompact_seq)
+solar_lcompact_final <- seqdef(data = solar_lcompact_df, 
+                           var = 2:ncol(solar_lcompact_df), 
+                           informat = "SPS", 
+                           SPS.in = list(xfix = "", sdsep = "/"))
+print(solar_lcompact_final[1:10, 1:30], format = 'SPS')
+saveRDS(object = solar_lcompact_df, file = "data/pre_processed/solar_long_compact_seq_df.RData")
+saveRDS(object = solar_lcompact_final, file = "data/pre_processed/solar_long_compact_seq_SPS_format.RData")
 
-# Excel course
+###############
+# Excel course:
+###############
 ex_seq_list <- create_course_seq(ex_posts_sorted)
 ex_seq_df <- create_equal_length_seq(ex_seq_list)
 ## create TraMineR sequences out of the sequences data frame
@@ -286,7 +310,9 @@ print(ex_seq_final[1:10, 1:30], format = 'SPS')
 saveRDS(object = ex_seq_df, file = "data/pre_processed/excel_sequences_df.RData")
 saveRDS(object = ex_seq_final, file = "data/pre_processed/excel_sequences_SPS_format.RData")
 
+############
 # FP course
+############
 fp_seq_list <- create_course_seq(fp_posts_sorted)
 fp_seq_df <- create_equal_length_seq(fp_seq_list)
 ## create TraMineR sequences out of the sequences data frame

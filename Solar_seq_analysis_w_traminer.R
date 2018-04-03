@@ -268,6 +268,7 @@ plot(lseq_ward)
 # - core_poster - those with engaged_count >= 3
 ####################################################################
 source("util_functions.R")
+library(knitr)
 
 # load the features about students' forum engagement
 forum_features <- read.csv("data/lca_features/lca_groups_solar.csv")
@@ -286,6 +287,62 @@ forum_features$core_poster[forum_features$engaged_count >= 3] <- TRUE
 
 #######################################################################
 # Comparison of the clusters obtained by applying the Ward's algorithm 
+# on sequence similarities computed using the metric sensitive to 
+# state distribution (Euclid distance with step=1)
+#######################################################################
+
+# Read in cluster assignments
+euclid_clusters <- readRDS("clustering/solar_ward_euclid_4_clust.RData") 
+# Merge the cluster assignments w/ forum features data, keeping only
+# the data for students with hand-coded threads
+euclid_clust_data <- merge(x = euclid_clusters, y = forum_features,
+                           by = "student_id", all.x = TRUE, all.y = FALSE)
+which(!complete.cases(euclid_clust_data))
+# features available for all the students
+
+# examine the data
+table(euclid_clust_data$engaged_count)
+round(prop.table(table(euclid_clust_data$engaged_count)), digits = 2)
+table(euclid_clust_data$engaged_scope)
+round(prop.table(table(euclid_clust_data$engaged_scope)), digits = 2)
+table(euclid_clust_data$core_poster)
+round(prop.table(table(euclid_clust_data$core_poster)), digits = 2)
+
+# Compare clusters w.r.t. the forum engagement features
+euclid_clust_stats <- summary.stats(euclid_clust_data[,c(3,4)], euclid_clust_data$cl4)
+kable(euclid_clust_stats, format = 'rst')
+# check the distribution of core posters
+with(euclid_clust_data, table(core_poster, cl4))
+
+# Use statistical tests to compare clusters based on the given features
+# Check first if the features are normally distributed
+shapiro.test(euclid_clust_data$engaged_count)
+hist(euclid_clust_data$engaged_count)
+shapiro.test(euclid_clust_data$engaged_scope)
+hist(euclid_clust_data$engaged_scope)
+# no, not even nearly => use non-parametric tests
+
+kruskal.test(engaged_count ~ cl4, data = euclid_clust_data)
+# Kruskal-Wallis chi-squared = 157.4, df = 3, p-value < 2.2e-16
+kruskal.test(engaged_scope ~ cl4, data = euclid_clust_data)
+# Kruskal-Wallis chi-squared = 91.348, df = 3, p-value < 2.2e-16
+# =>
+# Singificant difference is present among the clusters for both examined features
+# Use pairwise tests to examine where exactly (i.e. between which cluster pairs) 
+# the difference is present
+
+# First, do pairwise comparisons for the engaged_count feature
+engage_cnt_comparison <- pairwise.compare.Mann.Whitney(euclid_clust_data, 'engaged_count', 'cl4', 4) 
+kable(x = engage_cnt_comparison, format = 'rst')
+
+# Now, do pairwise comparisons for the engaged_scope feature
+engage_scope_comparison <- pairwise.compare.Mann.Whitney(euclid_clust_data, 'engaged_scope', 'cl4', 4) 
+kable(x = engage_scope_comparison, format = 'rst')
+
+
+
+#######################################################################
+# Comparison of the clusters obtained by applying the Ward's algorithm 
 # on sequence similarities computed using the OM metric 
 #######################################################################
 
@@ -298,29 +355,13 @@ om_clust_data <- merge(x = om_clusters, y = forum_features,
 which(!complete.cases(om_clust_data))
 # features available for all the students
 
-# examine the data
-table(om_clust_data$engaged_count)
-round(prop.table(table(om_clust_data$engaged_count)), digits = 2)
-table(om_clust_data$engaged_scope)
-round(prop.table(table(om_clust_data$engaged_scope)), digits = 2)
-table(om_clust_data$core_poster)
-round(prop.table(table(om_clust_data$core_poster)), digits = 2)
-
 # Compare clusters w.r.t. the forum engagement features
-library(knitr)
 om_clust_stats <- summary.stats(om_clust_data[,c(3,4)], om_clust_data$cl4)
 kable(om_clust_stats, format = 'rst')
 # check the distribution of core posters
 with(om_clust_data, table(core_poster, cl4))
 
 # Use statistical tests to compare clusters based on the given features
-# Check first if the features are normally distributed
-shapiro.test(om_clust_data$engaged_count)
-hist(om_clust_data$engaged_count)
-shapiro.test(om_clust_data$engaged_scope)
-hist(om_clust_data$engaged_scope)
-# no, not even nearly => use non-parametric tests
-
 kruskal.test(engaged_count ~ cl4, data = om_clust_data)
 # Kruskal-Wallis chi-squared = 169.62, df = 3, p-value < 2.2e-16
 kruskal.test(engaged_scope ~ cl4, data = om_clust_data)
